@@ -29,6 +29,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   const domain = getDomain(details.url);
   if (domain && blockedCache.has(domain)) {
     console.log('[URLGuard] Blocked navigation to:', domain, 'tab:', details.tabId);
+    await incrementBlockedCount();
 
     // Log to the source tab (the one with existing activity), not the dying new tab.
     // The dying tab won't have a tabActivity entry. Find the most recent tab that does.
@@ -147,6 +148,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     if (wasBlocked) {
       if (!activity.blockedCount) activity.blockedCount = 0;
       activity.blockedCount++;
+      incrementBlockedCount();
       updateBadge(details.tabId);
     }
   },
@@ -198,6 +200,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
   if (!domain || !blockedCache.has(domain)) return;
 
   console.log('[URLGuard] Killing new tab for blocked domain:', domain, 'opener:', tab.openerTabId);
+  await incrementBlockedCount();
 
   // Log to opener tab, or the tab with activity
   let logTo = tab.openerTabId;
@@ -278,6 +281,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   else if (msg.type === 'GET_IGNORED') {
     getIgnored().then(list => sendResponse({ ignored: list }));
+    return true;
+  }
+  else if (msg.type === 'GET_STATS') {
+    chrome.storage.local.get('urlguard_stats').then(result => {
+      sendResponse(result.urlguard_stats || { totalBlocked: 0 });
+    });
     return true;
   }
 });
@@ -424,6 +433,15 @@ async function logBlockedNavigation(sourceTabId, blockedDomain, blockedUrl) {
       await chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });
     }
   } catch {}
+}
+
+// --- Stats ---
+
+async function incrementBlockedCount() {
+  const result = await chrome.storage.local.get('urlguard_stats');
+  const stats = result.urlguard_stats || { totalBlocked: 0 };
+  stats.totalBlocked++;
+  await chrome.storage.local.set({ urlguard_stats: stats });
 }
 
 // --- Helpers ---

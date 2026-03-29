@@ -55,6 +55,16 @@ async function init() {
   await loadActivity();
   await loadBlocked();
   await loadIgnored();
+  await loadStats();
+}
+
+async function loadStats() {
+  const stats = await msg('GET_STATS');
+  const el = document.getElementById('total-blocked');
+  if (stats.totalBlocked > 0) {
+    el.textContent = `— ${stats.totalBlocked} blocked`;
+    el.style.display = 'inline';
+  }
 }
 
 async function loadActivity() {
