@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "URLGuard",
+  "version": "1.0.0",
+  "description": "Detects sneaky redirects and background requests. You decide what gets blocked.",
+  "permissions": [
+    "webRequest", "webNavigation", "tabs", "storage",
+    "declarativeNetRequest", "declarativeNetRequestWithHostAccess",
+    "notifications"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "action": {
+    "default_popup": "pages/popup.html",
+    "default_icon": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" }
+  },
+  "declarative_net_request": { "rule_resources": [] }
+}

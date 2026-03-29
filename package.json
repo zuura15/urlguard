@@ -1,0 +1,19 @@
+{
+  "name": "url-blocker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "psl": "^1.15.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  }
+}
