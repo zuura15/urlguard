@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>URLGuard — Privacy Policy</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111; background: #fff; line-height: 1.7; }
+.container { max-width: 680px; margin: 0 auto; padding: 48px 24px 80px; }
+h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.subtitle { font-size: 14px; color: #6b7280; margin-bottom: 40px; }
+h2 { font-size: 18px; font-weight: 600; margin: 32px 0 12px; }
+p, li { font-size: 15px; color: #374151; }
+p { margin-bottom: 12px; }
+ul { margin: 8px 0 16px 24px; }
+li { margin-bottom: 6px; }
+strong { color: #111; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border: 1px solid #e5e7eb; }
+th { background: #f9fafb; font-weight: 600; color: #111; }
+td { color: #374151; }
+.highlight { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 16px; margin: 20px 0; }
+.highlight p { margin: 0; color: #166534; font-weight: 500; }
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>URLGuard Privacy Policy</h1>
+<p class="subtitle">Last updated: April 1, 2026</p>
+
+<div class="highlight">
+<p>URLGuard does not collect, transmit, or share any user data. Everything stays on your device.</p>
+</div>
+
+<h2>What URLGuard does</h2>
+<p>URLGuard is a Chrome extension that detects sneaky redirects and hidden background requests made by websites you visit. It shows you what is happening and lets you decide which domains to block or allow.</p>
+
+<h2>Data that stays on your device</h2>
+<p>To do its job, URLGuard processes the following information <strong>entirely on your device</strong>:</p>
+<ul>
+<li><strong>Domain names and URLs</strong> of web requests, redirects, and navigations — used to detect suspicious activity and display it in the popup.</li>
+<li><strong>Your blocked and allowed domain lists</strong> — stored in <code>chrome.storage.local</code> so your preferences persist across browser sessions.</li>
+<li><strong>Session activity logs</strong> — stored in <code>chrome.storage.session</code> and automatically cleared when you close the browser.</li>
+<li><strong>A count of total blocked requests</strong> — stored locally for display in the popup.</li>
+</ul>
+
+<h2>Data we do NOT collect</h2>
+<ul>
+<li>No data is sent to any external server, API, or third party.</li>
+<li>No analytics or telemetry of any kind.</li>
+<li>No personally identifiable information.</li>
+<li>No browsing history is recorded or stored beyond the current session.</li>
+<li>No cookies are read, written, or tracked.</li>
+</ul>
+
+<h2>Permissions and why we need them</h2>
+<table>
+<tr><th>Permission</th><th>Why it is needed</th></tr>
+<tr><td><code>webRequest</code></td><td>Detect HTTP redirects and third-party background requests in real time.</td></tr>
+<tr><td><code>webNavigation</code></td><td>Detect when navigations start and complete, to identify redirect chains and domain mismatches.</td></tr>
+<tr><td><code>tabs</code></td><td>Read the active tab URL to show per-site activity in the popup.</td></tr>
+<tr><td><code>storage</code></td><td>Persist your blocked and allowed domain lists locally across browser sessions.</td></tr>
+<tr><td><code>declarativeNetRequest</code></td><td>Block network requests to domains you have chosen to block.</td></tr>
+<tr><td><code>declarativeNetRequestWithHostAccess</code></td><td>Apply your blocking rules across all websites.</td></tr>
+<tr><td><code>host_permissions: &lt;all_urls&gt;</code></td><td>Monitor requests on any website you visit so redirects and background requests can be detected regardless of the site.</td></tr>
+</table>
+
+<h2>Third-party services</h2>
+<p>URLGuard does not use any third-party services, libraries, SDKs, or APIs. There are no external dependencies.</p>
+
+<h2>Data retention</h2>
+<ul>
+<li><strong>Session data</strong> (activity logs, blocked request counts per tab) is automatically cleared when you close the browser.</li>
+<li><strong>Persistent data</strong> (your blocked and allowed domain lists, total blocked count) remains until you remove domains or uninstall the extension.</li>
+</ul>
+
+<h2>Children's privacy</h2>
+<p>URLGuard does not knowingly collect any information from anyone, including children under 13. No personal data is collected from any user.</p>
+
+<h2>Changes to this policy</h2>
+<p>If this privacy policy is updated, the changes will be posted on this page with an updated date. Since URLGuard collects no data, meaningful changes to this policy are unlikely.</p>
+
+<h2>Contact</h2>
+<p>If you have questions about this privacy policy, you can open an issue on the <a href="https://github.com">URLGuard GitHub repository</a>.</p>
+
+</div>
+</body>
+</html>

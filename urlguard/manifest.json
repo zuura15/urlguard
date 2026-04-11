@@ -5,9 +5,9 @@
   "description": "Detects sneaky redirects and background requests. You decide what gets blocked.",
   "permissions": [
     "webRequest", "webNavigation", "tabs", "storage",
-    "declarativeNetRequest", "declarativeNetRequestWithHostAccess",
-    "notifications"
+    "declarativeNetRequest", "declarativeNetRequestWithHostAccess"
   ],
+  "icons": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background/service-worker.js"

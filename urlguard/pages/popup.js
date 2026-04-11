@@ -9,37 +9,42 @@ async function init() {
   try {
     pageDomain = new URL(tab.url).hostname;
     document.getElementById('page-domain').textContent = pageDomain;
+    document.getElementById('site-context-domain').textContent = pageDomain;
   } catch {}
 
   // Block current page button
   const blockPageBtn = document.getElementById('block-page-btn');
   if (pageDomain && !tab.url.startsWith('chrome://')) {
     const blocked = (await msg('GET_BLOCKED')).blocked;
-    if (blocked.includes(pageDomain)) {
+
+    const setBlock = () => {
+      blockPageBtn.textContent = 'Block this site';
+      blockPageBtn.style.color = '#dc2626';
+      blockPageBtn.style.borderColor = '#fecaca';
+      blockPageBtn.onclick = async () => {
+        await msg('BLOCK_DOMAIN', { domain: pageDomain });
+        await loadActivity();
+        await loadBlocked();
+        setUnblock();
+      };
+    };
+    const setUnblock = () => {
       blockPageBtn.textContent = 'Unblock this site';
-      blockPageBtn.style.display = 'inline-block';
       blockPageBtn.style.color = '#059669';
       blockPageBtn.style.borderColor = '#a7f3d0';
       blockPageBtn.onclick = async () => {
         await msg('UNBLOCK_DOMAIN', { domain: pageDomain });
         await loadActivity();
         await loadBlocked();
-        blockPageBtn.textContent = 'Block this site';
-        blockPageBtn.style.color = '#dc2626';
-        blockPageBtn.style.borderColor = '#fecaca';
-        blockPageBtn.onclick = doBlock;
+        setBlock();
       };
+    };
+
+    blockPageBtn.style.display = 'inline-block';
+    if (blocked.includes(pageDomain)) {
+      setUnblock();
     } else {
-      blockPageBtn.style.display = 'inline-block';
-      const doBlock = async () => {
-        await msg('BLOCK_DOMAIN', { domain: pageDomain });
-        await loadActivity();
-        await loadBlocked();
-        blockPageBtn.textContent = 'Unblock this site';
-        blockPageBtn.style.color = '#059669';
-        blockPageBtn.style.borderColor = '#a7f3d0';
-      };
-      blockPageBtn.onclick = doBlock;
+      setBlock();
     }
   }
 
@@ -77,7 +82,7 @@ async function loadActivity() {
   const blockAllBar = document.getElementById('block-all-bar');
   list.innerHTML = '';
 
-  const events = (activity.events || []).filter(e => !ignored.has(e.to) && !ignored.has(e.from));
+  const events = activity.events || [];
 
   // Read persistent blocked log (survives worker restarts)
   const blockedLog = (await msg('GET_BLOCKED_LOG')).log || [];
@@ -197,8 +202,9 @@ async function loadActivity() {
         content.appendChild(arrow);
       }
 
+      const isAllowed = ignored.has(node.domain);
       const domainSpan = document.createElement('span');
-      domainSpan.className = 'node-domain' + (isPage ? ' is-page' : ' is-third-party') + (isNodeBlocked ? ' node-blocked' : '');
+      domainSpan.className = 'node-domain' + (isPage ? ' is-page' : ' is-third-party') + (isNodeBlocked ? ' node-blocked' : '') + (isAllowed ? ' is-allowed' : '');
       domainSpan.textContent = node.domain;
       content.appendChild(domainSpan);
 
@@ -216,10 +222,10 @@ async function loadActivity() {
         content.appendChild(blockedBadge);
       }
 
-      // Hover actions — show on any non-blocked node (including page domain for background requests)
+      // Inline actions — show on any non-blocked, non-page node (or page domain for background requests)
       if (!isNodeBlocked && (!isPage || chain.type === 'background')) {
-        const hoverActions = document.createElement('span');
-        hoverActions.className = 'node-hover-actions';
+        const inlineActions = document.createElement('span');
+        inlineActions.className = 'node-hover-actions';
 
         const blockBtn = document.createElement('button');
         blockBtn.className = 'h-block';
@@ -231,70 +237,28 @@ async function loadActivity() {
           await loadActivity();
           await loadBlocked();
         };
-        hoverActions.appendChild(blockBtn);
+        inlineActions.appendChild(blockBtn);
 
         const ignoreBtn = document.createElement('button');
-        ignoreBtn.className = 'h-ignore';
+        ignoreBtn.className = 'h-ignore' + (isAllowed ? ' is-allowed' : '');
         ignoreBtn.textContent = '✓';
-        ignoreBtn.title = 'Ignore ' + node.domain;
+        ignoreBtn.title = isAllowed ? 'Remove from allowed list' : 'Allow ' + node.domain;
         ignoreBtn.onclick = async (e) => {
           e.stopPropagation();
-          await msg('IGNORE_DOMAIN', { domain: node.domain });
+          if (isAllowed) {
+            await msg('UNIGNORE_DOMAIN', { domain: node.domain });
+          } else {
+            await msg('IGNORE_DOMAIN', { domain: node.domain });
+          }
           await loadActivity();
         };
-        hoverActions.appendChild(ignoreBtn);
+        inlineActions.appendChild(ignoreBtn);
 
-        content.appendChild(hoverActions);
+        content.appendChild(inlineActions);
       }
 
       nodeDiv.appendChild(content);
       chainDiv.appendChild(nodeDiv);
-    }
-
-    // Actions: block buttons for unblocked 3rd party domains in this chain
-    const unblockedInChain = chain.nodes
-      .filter(n => n.domain !== getDomain(activity.url) && !blocked.has(n.domain))
-      .map(n => n.domain);
-    const uniqueUnblocked = [...new Set(unblockedInChain)];
-
-    if (uniqueUnblocked.length > 0) {
-      const actions = document.createElement('div');
-      actions.className = 'tree-actions';
-
-      for (const domain of uniqueUnblocked) {
-        const btn = document.createElement('button');
-        btn.className = 'block';
-        btn.textContent = 'Block ' + domain;
-        btn.onclick = async () => {
-          await msg('BLOCK_DOMAIN', { domain });
-          await loadActivity();
-          await loadBlocked();
-        };
-        actions.appendChild(btn);
-      }
-
-      if (uniqueUnblocked.length > 1) {
-        const allBtn = document.createElement('button');
-        allBtn.className = 'block';
-        allBtn.textContent = 'Block all in chain';
-        allBtn.onclick = async () => {
-          for (const d of uniqueUnblocked) await msg('BLOCK_DOMAIN', { domain: d });
-          await loadActivity();
-          await loadBlocked();
-        };
-        actions.appendChild(allBtn);
-      }
-
-      const ignoreBtn = document.createElement('button');
-      ignoreBtn.className = 'ignore';
-      ignoreBtn.textContent = 'Ignore';
-      ignoreBtn.onclick = async () => {
-        for (const d of uniqueUnblocked) await msg('IGNORE_DOMAIN', { domain: d });
-        await loadActivity();
-      };
-      actions.appendChild(ignoreBtn);
-
-      chainDiv.appendChild(actions);
     }
 
     list.appendChild(chainDiv);

@@ -28,7 +28,6 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   // Check if this domain is blocked — kill the navigation immediately
   const domain = getDomain(details.url);
   if (domain && blockedCache.has(domain)) {
-    console.log('[URLGuard] Blocked navigation to:', domain, 'tab:', details.tabId);
     await incrementBlockedCount();
 
     // Log to the source tab (the one with existing activity), not the dying new tab.
@@ -39,7 +38,6 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
       const candidates = Object.keys(tabActivity).map(Number);
       if (candidates.length > 0) {
         logTo = candidates[candidates.length - 1];
-        console.log('[URLGuard] Routing blocked event to source tab:', logTo, 'instead of dying tab:', details.tabId);
       }
     }
     await logBlockedNavigation(logTo, domain, details.url);
@@ -53,7 +51,6 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   intendedUrls[details.tabId] = details.url;
   // Initialize tab activity
   tabActivity[details.tabId] = { url: details.url, events: [] };
-  console.log('[URLGuard] Navigation started:', details.url);
 });
 
 // Detect HTTP redirects (301, 302, etc.)
@@ -66,7 +63,6 @@ chrome.webRequest.onBeforeRedirect.addListener(
     const initiator = details.initiator || details.documentUrl || null;
 
     if (fromDomain && toDomain && fromDomain !== toDomain) {
-      console.log('[URLGuard] Redirect:', fromDomain, '→', toDomain, 'initiator:', initiator);
       addEvent(details.tabId, {
         type: 'redirect',
         from: fromDomain,
@@ -91,7 +87,6 @@ chrome.webNavigation.onCommitted.addListener((details) => {
   const actualDomain = getDomain(details.url);
 
   if (intendedDomain && actualDomain && intendedDomain !== actualDomain) {
-    console.log('[URLGuard] Landing mismatch:', intendedDomain, '→', actualDomain);
     addEvent(details.tabId, {
       type: 'redirect',
       from: intendedDomain,
@@ -199,7 +194,6 @@ chrome.tabs.onCreated.addListener(async (tab) => {
   const domain = getDomain(url);
   if (!domain || !blockedCache.has(domain)) return;
 
-  console.log('[URLGuard] Killing new tab for blocked domain:', domain, 'opener:', tab.openerTabId);
   await incrementBlockedCount();
 
   // Log to opener tab, or the tab with activity
@@ -334,7 +328,6 @@ async function blockDomain(domain) {
       }],
       removeRuleIds: [ruleId]
     });
-    console.log('[URLGuard] Blocked domain:', domain, 'ruleId:', ruleId);
   } catch (err) {
     console.error('[URLGuard] DNR block error:', err);
   }
@@ -351,7 +344,6 @@ async function unblockDomain(domain) {
       addRules: [],
       removeRuleIds: [ruleId]
     });
-    console.log('[URLGuard] Unblocked domain:', domain);
   } catch (err) {
     console.error('[URLGuard] DNR unblock error:', err);
   }
@@ -388,7 +380,6 @@ async function unignoreDomain(domain) {
 // --- Log blocked navigations to the source tab ---
 
 async function logBlockedNavigation(sourceTabId, blockedDomain, blockedUrl) {
-  console.log('[URLGuard] logBlockedNavigation:', blockedDomain, '→ storing persistently');
 
   // Persist to chrome.storage.session — survives worker restarts
   // Key: urlguard_blocked_log
@@ -405,7 +396,6 @@ async function logBlockedNavigation(sourceTabId, blockedDomain, blockedUrl) {
         timestamp: Date.now()
       });
       await chrome.storage.session.set({ urlguard_blocked_log: log });
-      console.log('[URLGuard] Persisted blocked event, total:', log.length);
     }
   } catch (err) {
     console.error('[URLGuard] Failed to persist blocked event:', err);
