@@ -1,4 +1,4 @@
-# URLGuard TODOs
+# InControl TODOs
 
 ## P3: OAuth popup false positive mitigation
 **What:** Add known OAuth/payment domains to an internal whitelist that suppresses the `multi_click` signal.

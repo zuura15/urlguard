@@ -1,4 +1,4 @@
-# Chrome Web Store Submission Guide — URLGuard
+# Chrome Web Store Submission Guide — InControl
 
 ## Privacy Policy (REQUIRED)
 
@@ -6,7 +6,7 @@ Google requires a privacy policy URL for extensions using `<all_urls>`, `webRequ
 
 You need to host a privacy policy page that states:
 
-1. **What data is collected**: URLGuard monitors web request URLs and domain names to detect redirects and background requests. All data is stored locally on the user's device using `chrome.storage.local` and `chrome.storage.session`.
+1. **What data is collected**: InControl monitors web request URLs and domain names to detect redirects and background requests. All data is stored locally on the user's device using `chrome.storage.local` and `chrome.storage.session`.
 2. **What data is NOT collected**: No data is transmitted to any external server. No analytics, no telemetry, no user tracking.
 3. **What permissions are used and why**:
    - `webRequest` — Monitor HTTP requests to detect redirects and background requests
