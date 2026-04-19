@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InControl — About & How to Use</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111; background: #fff; line-height: 1.7; }
+.container { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: #059669; }
+.brand h1 { font-size: 28px; font-weight: 700; }
+.subtitle { font-size: 15px; color: #6b7280; margin-bottom: 40px; }
+h2 { font-size: 18px; font-weight: 600; margin: 36px 0 10px; }
+h3 { font-size: 14px; font-weight: 600; margin: 18px 0 6px; color: #111; }
+p, li { font-size: 15px; color: #374151; }
+p { margin-bottom: 12px; }
+ul { margin: 4px 0 16px 24px; }
+li { margin-bottom: 6px; }
+strong { color: #111; }
+code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13px; background: #f3f4f6; padding: 1px 6px; border-radius: 3px; color: #111; }
+.tab-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+.tab-card .tab-name { font-weight: 600; color: #2563eb; font-size: 14px; margin-bottom: 4px; }
+.callout { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 14px 16px; margin: 20px 0; }
+.callout p { margin: 0; color: #166534; font-weight: 500; font-size: 14px; }
+.callout-warn { background: #fffbeb; border-color: #fde68a; }
+.callout-warn p { color: #92400e; }
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+.footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 13px; color: #6b7280; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="brand">
+  <span class="dot"></span>
+  <h1>InControl</h1>
+</div>
+<p class="subtitle">Block sneaky redirects and third-party background requests. You stay in control.</p>
+
+<div class="callout">
+<p>🛡 No data leaves your browser. No analytics. No accounts. Everything stays on your device.</p>
+</div>
+
+<h2>What it catches</h2>
+<p>InControl watches two kinds of behavior that normal browsing tools ignore:</p>
+<ul>
+  <li><strong>Redirect hijacks</strong> — you click a link to site A, it silently redirects through B, C, D before landing somewhere else. InControl surfaces the full chain.</li>
+  <li><strong>Background fires</strong> — you load a page and it quietly fires requests to dozens of other domains (trackers, ad networks, fingerprinters). InControl lists them per tab so you can see exactly who your current page is talking to.</li>
+</ul>
+
+<h2>How to use the popup</h2>
+<p>Click the InControl icon in the toolbar. The popup has three tabs:</p>
+
+<div class="tab-card">
+  <div class="tab-name">Activity</div>
+  <p style="margin:0;">Live view of what's happening on the <strong>current tab</strong>. Redirect chains and third-party domains appear as a tree. Hover any domain to <strong>Block</strong> or <strong>Allow</strong> it.</p>
+</div>
+
+<div class="tab-card">
+  <div class="tab-name">Blocked</div>
+  <p style="margin:0;">Every domain you've chosen to block. Future requests to these domains are stopped before they load. Hover to unblock.</p>
+</div>
+
+<div class="tab-card">
+  <div class="tab-name">Allowed</div>
+  <p style="margin:0;">Domains you've marked as trusted. InControl stops flagging these in the Activity view. Useful for CDNs or services you rely on.</p>
+</div>
+
+<h2>How blocking actually works</h2>
+<p>When you block a domain, InControl adds a rule to Chrome's <code>declarativeNetRequest</code> engine. From that point on, requests to that domain are refused at the network layer — the page never sees a response. Blocking persists across browser sessions.</p>
+
+<h3>Block this site</h3>
+<p>The <strong>Block this site</strong> button in the popup header blocks the domain of the page you're currently on. Visiting it again will fail — useful for shady redirect targets or sites you want to permanently avoid.</p>
+
+<h3>Block all 3rd party domains</h3>
+<p>When a page has many third-party requests, a <strong>Block all</strong> bar appears. One click blocks every third-party domain firing on that tab. Use carefully — legitimate sites often load from CDNs that you'll want to allow again afterward.</p>
+
+<h2>What shows up in "Activity"</h2>
+<p>A typical entry might look like:</p>
+<ul>
+  <li>A redirect chain: <code>news-site.com</code> → <code>ads.net</code> → <code>tracker.io</code> → <code>destination.com</code></li>
+  <li>A background tree: the page domain at the root, with each third-party domain hanging off as a child node</li>
+  <li>A blocked badge: if InControl already stopped something on this tab, a red shield summarizes the count</li>
+</ul>
+
+<h2>Permissions, and why</h2>
+<p>InControl asks for broad permissions because redirect detection requires watching all tabs, not just one. Here is what each is used for:</p>
+<ul>
+  <li><code>webRequest</code> + <code>webNavigation</code> — observe redirects and third-party fires in real time</li>
+  <li><code>tabs</code> — read the active tab's URL to scope the popup view to the current page</li>
+  <li><code>storage</code> — remember your blocked and allowed lists across sessions</li>
+  <li><code>declarativeNetRequest</code> — enforce blocks at the network layer</li>
+  <li><code>&lt;all_urls&gt;</code> — required to monitor behavior on any site you visit</li>
+</ul>
+
+<div class="callout callout-warn">
+<p>⚠ Blocking breaks things. If a site stops working, check the <strong>Blocked</strong> tab — chances are a CDN or auth domain got swept in. Unblock and it'll work again.</p>
+</div>
+
+<h2>Privacy</h2>
+<p>Full privacy policy: <a href="https://zuura15.github.io/urlguard/privacy-policy.html" target="_blank">zuura15.github.io/urlguard/privacy-policy.html</a></p>
+
+<div class="footer">
+  InControl — version 1.0.0 · Source: <a href="https://github.com/zuura15/urlguard" target="_blank">github.com/zuura15/urlguard</a>
+</div>
+
+</div>
+</body>
+</html>

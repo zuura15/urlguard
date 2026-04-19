@@ -1,5 +1,9 @@
 let currentTabId = null;
 
+document.getElementById('about-btn').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('pages/about.html') });
+});
+
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;

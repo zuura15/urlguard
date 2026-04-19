@@ -454,3 +454,9 @@ function addEvent(tabId, event) {
     updateBadge(tabId);
   }
 }
+
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('pages/about.html') });
+  }
+});
