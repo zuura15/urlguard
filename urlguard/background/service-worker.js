@@ -9,6 +9,10 @@
 
 const MAX_EVENTS_PER_TAB = 50;
 
+// A new top-level navigation arriving within this window of the previous chain's
+// last hop is treated as a client/meta-refresh continuation, not a fresh chain.
+const CHAIN_CONTINUATION_MS = 2500;
+
 // In-memory log of recent suspicious activity per tab
 // Shape: { [tabId]: { url, events: [...], blockedCount: number } }
 const tabActivity = {};
@@ -21,6 +25,13 @@ getBlocked().then(list => { blockedCache = new Set(list); });
 
 // Remember what URL the user intended to visit (before redirects)
 const intendedUrls = {};
+
+// Per-tab redirect chain state. Captures every hop (HTTP redirect, JS/meta
+// client redirect) belonging to a single user-initiated navigation, so the
+// popup can render a complete tree and the user can block any interim domain.
+// Shape: { [tabId]: { id, startUrl, hops: [{url, domain, kind, timestamp}], lastHopAt, committed } }
+const navChains = {};
+let nextChainId = 1;
 
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   if (details.frameId !== 0) return;
@@ -49,19 +60,70 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   }
 
   intendedUrls[details.tabId] = details.url;
-  // Initialize tab activity
-  tabActivity[details.tabId] = { url: details.url, events: [] };
+
+  // Continue or start a redirect chain on this tab. A new top-level navigation
+  // arriving within CHAIN_CONTINUATION_MS of the previous hop is treated as a
+  // JS/meta-refresh continuation of the same chain, preserving prior events
+  // so the popup keeps rendering the full hop history. A truly fresh
+  // navigation (>2.5s after) starts a new chain and clears prior activity.
+  const now = Date.now();
+  const existing = navChains[details.tabId];
+  const isContinuation = existing && (now - existing.lastHopAt) < CHAIN_CONTINUATION_MS;
+
+  if (isContinuation) {
+    appendHop(existing, details.url, 'client', now);
+    if (!tabActivity[details.tabId]) {
+      tabActivity[details.tabId] = { url: details.url, events: [] };
+    } else {
+      tabActivity[details.tabId].url = details.url;
+    }
+  } else {
+    navChains[details.tabId] = {
+      id: nextChainId++,
+      startUrl: details.url,
+      hops: [{ url: details.url, domain: getDomain(details.url) || '', kind: 'start', timestamp: now }],
+      lastHopAt: now,
+      committed: false
+    };
+    tabActivity[details.tabId] = { url: details.url, events: [] };
+  }
 });
+
+function appendHop(chain, url, kind, timestamp) {
+  const domain = getDomain(url) || '';
+  const last = chain.hops[chain.hops.length - 1];
+  if (last && last.url === url) return; // dedupe identical consecutive hops
+  chain.hops.push({ url, domain, kind, timestamp });
+  chain.lastHopAt = timestamp;
+  chain.committed = false;
+}
 
 // Detect HTTP redirects (301, 302, etc.)
 chrome.webRequest.onBeforeRedirect.addListener(
   (details) => {
     if (details.tabId < 0) return;
+    if (details.type !== 'main_frame') return;
 
     const fromDomain = getDomain(details.url);
     const toDomain = getDomain(details.redirectUrl);
     const initiator = details.initiator || details.documentUrl || null;
+    const now = Date.now();
 
+    // Append every hop to the active chain (including same-domain hops),
+    // so the user sees the complete chain in the popup.
+    const chain = navChains[details.tabId];
+    if (chain) {
+      appendHop(chain, details.redirectUrl, 'http', now);
+    }
+
+    // Surface interim hops that target an already-blocked domain (DNR will
+    // also cancel the request, but we want it visible in the activity log).
+    if (toDomain && blockedCache.has(toDomain)) {
+      logBlockedNavigation(details.tabId, toDomain, details.redirectUrl);
+    }
+
+    // Keep emitting the legacy single-hop redirect event for back-compat
+    // with older buildChains rendering paths.
     if (fromDomain && toDomain && fromDomain !== toDomain) {
       addEvent(details.tabId, {
         type: 'redirect',
@@ -70,7 +132,7 @@ chrome.webRequest.onBeforeRedirect.addListener(
         fromUrl: details.url,
         toUrl: details.redirectUrl,
         initiator: initiator,
-        timestamp: Date.now()
+        timestamp: now
       });
     }
   },
@@ -81,12 +143,11 @@ chrome.webRequest.onBeforeRedirect.addListener(
 chrome.webNavigation.onCommitted.addListener((details) => {
   if (details.frameId !== 0) return;
   const intended = intendedUrls[details.tabId];
-  if (!intended) return;
 
-  const intendedDomain = getDomain(intended);
+  const intendedDomain = intended ? getDomain(intended) : null;
   const actualDomain = getDomain(details.url);
 
-  if (intendedDomain && actualDomain && intendedDomain !== actualDomain) {
+  if (intended && intendedDomain && actualDomain && intendedDomain !== actualDomain) {
     addEvent(details.tabId, {
       type: 'redirect',
       from: intendedDomain,
@@ -98,6 +159,16 @@ chrome.webNavigation.onCommitted.addListener((details) => {
     });
   }
 
+  // Finalize / update the redirect chain on commit. Ensure the committed URL
+  // is the last hop, then upsert a single redirect_chain event so the popup
+  // can render the complete tree without lossy reassembly.
+  const chain = navChains[details.tabId];
+  if (chain) {
+    appendHop(chain, details.url, 'committed', Date.now());
+    chain.committed = true;
+    upsertRedirectChainEvent(details.tabId, chain);
+  }
+
   // Update tab activity URL to the committed URL
   if (tabActivity[details.tabId]) {
     tabActivity[details.tabId].url = details.url;
@@ -105,6 +176,32 @@ chrome.webNavigation.onCommitted.addListener((details) => {
 
   updateBadge(details.tabId);
 });
+
+function upsertRedirectChainEvent(tabId, chain) {
+  // Only emit if there's a real chain (more than a single start hop).
+  if (chain.hops.length < 2) return;
+
+  if (!tabActivity[tabId]) {
+    tabActivity[tabId] = { url: '', events: [] };
+  }
+  const events = tabActivity[tabId].events;
+
+  const payload = {
+    type: 'redirect_chain',
+    chainId: chain.id,
+    hops: chain.hops.map(h => ({ url: h.url, domain: h.domain, kind: h.kind, timestamp: h.timestamp })),
+    timestamp: Date.now()
+  };
+
+  // Replace any existing event for this chain id, otherwise append.
+  const idx = events.findIndex(e => e.type === 'redirect_chain' && e.chainId === chain.id);
+  if (idx >= 0) {
+    events[idx] = payload;
+  } else if (events.length < MAX_EVENTS_PER_TAB) {
+    events.push(payload);
+  }
+  updateBadge(tabId);
+}
 
 // --- Track background requests (3rd party requests from the page) ---
 
@@ -214,6 +311,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete tabActivity[tabId];
   delete intendedUrls[tabId];
+  delete navChains[tabId];
 });
 
 // --- Badge: show count of suspicious events ---

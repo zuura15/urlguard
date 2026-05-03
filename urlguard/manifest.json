@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "InControl — Block Sneaky Redirects & Background Requests",
-  "version": "1.0.0",
+  "name": "InControl - Block URLs, Sneaky Redirects & Background Requests",
+  "version": "1.1.0",
   "description": "Block sneaky redirects and third-party background requests. You stay in control.",
   "permissions": [
     "webRequest", "webNavigation", "tabs", "storage",

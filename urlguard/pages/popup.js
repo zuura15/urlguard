@@ -118,7 +118,8 @@ async function loadActivity() {
     }
   }
 
-  if (allEvents.length === 0) {
+  const hasPageDomain = !!getDomain(activity.url) && /^https?:/.test(activity.url || '');
+  if (allEvents.length === 0 && !hasPageDomain) {
     emptyMsg.style.display = 'block';
     blockAllBar.style.display = 'none';
     return;
@@ -126,7 +127,17 @@ async function loadActivity() {
   emptyMsg.style.display = 'none';
 
   // Build tree
-  const chains = buildChains(allEvents, getDomain(activity.url));
+  const pageDomain = getDomain(activity.url);
+  const chains = buildChains(allEvents, pageDomain);
+
+  // Always show the current page domain as the first chain so the user can
+  // block/allow it inline alongside everything else in the tree.
+  if (pageDomain && /^https?:/.test(activity.url || '')) {
+    chains.unshift({
+      type: 'page',
+      nodes: [{ domain: pageDomain, role: 'page' }]
+    });
+  }
 
   // Show block-all bar
   const allThirdParty = new Set();
@@ -162,6 +173,7 @@ async function loadActivity() {
     typeSpan.className = 'chain-type ' + chain.type;
     typeSpan.textContent = chain.type === 'redirect' ? 'Redirect chain'
       : chain.type === 'blocked' ? 'Blocked requests'
+      : chain.type === 'page' ? 'Current site'
       : 'Background requests';
     header.appendChild(typeSpan);
     if (chain.type !== 'blocked' && chain.nodes.some(n => blocked.has(n.domain))) {
@@ -219,6 +231,16 @@ async function loadActivity() {
         content.appendChild(roleBadge);
       }
 
+      // Show how this hop was reached (HTTP redirect / JS / meta-refresh).
+      if (node.kind && node.kind !== 'start' && node.kind !== 'committed') {
+        const kindBadge = document.createElement('span');
+        kindBadge.className = 'node-badge kind';
+        kindBadge.textContent = node.kind === 'http' ? 'HTTP'
+          : node.kind === 'client' ? 'JS'
+          : node.kind;
+        content.appendChild(kindBadge);
+      }
+
       if (isNodeBlocked) {
         const blockedBadge = document.createElement('span');
         blockedBadge.className = 'node-badge blocked';
@@ -226,8 +248,9 @@ async function loadActivity() {
         content.appendChild(blockedBadge);
       }
 
-      // Inline actions — show on any non-blocked, non-page node (or page domain for background requests)
-      if (!isNodeBlocked && (!isPage || chain.type === 'background')) {
+      // Inline actions — show on any non-blocked, non-page node (or page domain
+      // for background-request and page-domain chains).
+      if (!isNodeBlocked && (!isPage || chain.type === 'background' || chain.type === 'page')) {
         const inlineActions = document.createElement('span');
         inlineActions.className = 'node-hover-actions';
 
@@ -273,14 +296,47 @@ function buildChains(events, pageDomain) {
   // Group redirect events into chains: follow from → to links
   // Background events group by initiator domain
 
+  const chainEvents = events.filter(e => e.type === 'redirect_chain');
   const redirectEvents = events.filter(e => e.type === 'redirect');
   const backgroundEvents = events.filter(e => e.type === 'background');
   const blockedEvents = events.filter(e => e.type === 'blocked');
 
   const chains = [];
 
+  // Prefer the canonical redirect_chain events emitted by the service worker.
+  // Each one already carries every hop (HTTP, client, meta) for one navigation,
+  // so we can render it as a single tree without lossy pairwise reassembly.
+  const subsumedPairs = new Set();
+  for (const ev of chainEvents) {
+    if (!ev.hops || ev.hops.length < 2) continue;
+    const nodes = [];
+    let prevDomain = null;
+    for (const hop of ev.hops) {
+      const domain = hop.domain || (hop.url ? getDomain(hop.url) : null);
+      if (!domain) continue;
+      // Collapse consecutive identical-domain hops into one node, keeping the
+      // first hop's kind (a same-domain HTTP redirect followed by a commit
+      // shouldn't render two stacked rows for the same host).
+      if (nodes.length === 0 || nodes[nodes.length - 1].domain !== domain) {
+        nodes.push({ domain, role: null, kind: hop.kind });
+      }
+      if (prevDomain && prevDomain !== domain) {
+        subsumedPairs.add(prevDomain + '→' + domain);
+      }
+      prevDomain = domain;
+    }
+    if (nodes.length >= 2) {
+      chains.push({ type: 'redirect', nodes });
+    }
+  }
+
   // Build redirect chains by following from → to links
   const used = new Set();
+  // Skip legacy single-hop redirect events that are already represented
+  // inside a redirect_chain we just rendered.
+  for (const ev of redirectEvents) {
+    if (subsumedPairs.has(ev.from + '→' + ev.to)) used.add(ev);
+  }
   for (const event of redirectEvents) {
     if (used.has(event)) continue;
 
