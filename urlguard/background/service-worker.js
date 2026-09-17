@@ -390,12 +390,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const site = msg.site || getDomain((sender.tab && sender.tab.url) || '') || '';
     Promise.all([getOverlayGuard(), getIgnored(), getBlocked()]).then(([og, ignored, blocked]) => {
       const effEnabled = og.enabled && !og.disabledSites.includes(site);
+      const blockAllOn = !og.blockAllOffSites.includes(site);   // ON by default
       sendResponse({
         enabled: effEnabled,
         globalEnabled: og.enabled,
         siteDisabled: og.disabledSites.includes(site),
-        blockAll: effEnabled && og.blockAllSites.includes(site),
-        siteBlockAll: og.blockAllSites.includes(site),
+        blockAll: effEnabled && blockAllOn,
+        siteBlockAll: blockAllOn,
         allowed: ignored,
         blocked
       });
@@ -486,16 +487,17 @@ async function getOverlayGuard() {
   return {
     enabled: og.enabled !== false,
     disabledSites: Array.isArray(og.disabledSites) ? og.disabledSites : [],
-    blockAllSites: Array.isArray(og.blockAllSites) ? og.blockAllSites : []
+    // Block-all is ON by default; this lists the sites the user switched OFF.
+    blockAllOffSites: Array.isArray(og.blockAllOffSites) ? og.blockAllOffSites : []
   };
 }
 
 async function setPopupBlockAllSite(site, enabled) {
   if (!site) return;
   const og = await getOverlayGuard();
-  const has = og.blockAllSites.includes(site);
-  if (enabled && !has) og.blockAllSites.push(site);
-  if (!enabled && has) og.blockAllSites = og.blockAllSites.filter(s => s !== site);
+  const has = og.blockAllOffSites.includes(site);
+  if (enabled && has) og.blockAllOffSites = og.blockAllOffSites.filter(s => s !== site); // on = remove from off-list
+  if (!enabled && !has) og.blockAllOffSites.push(site);                                   // off = add to off-list
   await chrome.storage.local.set({ urlguard_overlay_guard: og });
 }
 
