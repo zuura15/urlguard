@@ -33,6 +33,8 @@ During Chrome Web Store submission, you must justify each permission. Use these:
 | `declarativeNetRequest` | Required to block network requests to domains the user has explicitly chosen to block |
 | `declarativeNetRequestWithHostAccess` | Required to apply blocking rules across all websites |
 | `host_permissions: <all_urls>` | Required to monitor and block requests on any website the user visits |
+| Content script (`content/overlay-guard.js`, all frames) | Video guard: finds ad overlays stacked on top of video players (elements covering the player that link or embed a third-party domain) and removes them from the page. Runs locally, reads no page content beyond element geometry and link/iframe targets, transmits nothing. |
+| Content script (`content/popup-guard-main.js`, MAIN world, all frames) | Video guard: wraps `window.open` and observes link clicks so popunders triggered by a click on a video (or targeting a domain the user blocked) are cancelled before a tab is created. Needs the page's JS world because `window.open` cannot be intercepted from the isolated world. Transmits nothing. |
 
 ## `notifications` Permission
 
@@ -56,5 +58,5 @@ Before uploading to the Chrome Web Store developer dashboard, prepare:
 The zip should contain only the `urlguard/` directory contents (not the parent). See the build script or run:
 
 ```bash
-cd urlguard && zip -r ../urlguard-1.0.0.zip . -x '.*'
+cd urlguard && zip -r ../incontrol-1.2.0.zip . -x '.*'
 ```

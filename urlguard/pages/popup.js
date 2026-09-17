@@ -52,6 +52,11 @@ async function init() {
     }
   }
 
+  // Overlay guard per-site toggle
+  if (pageDomain && /^https?:/.test(tab.url || '')) {
+    await renderOverlayRow(pageDomain);
+  }
+
   document.querySelectorAll('.tab').forEach(t => {
     t.onclick = () => {
       document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -67,11 +72,76 @@ async function init() {
   await loadStats();
 }
 
+async function renderOverlayRow(site) {
+  const row = document.getElementById('overlay-row');
+  const state = document.getElementById('overlay-state');
+  const btn = document.getElementById('overlay-toggle');
+  const og = await msg('GET_OVERLAY_SETTINGS', { site });
+  row.style.display = 'flex';
+
+  if (!og.globalEnabled) {
+    state.textContent = 'off everywhere';
+    state.className = 'overlay-state off';
+    btn.textContent = 'Turn on';
+    btn.title = 'Enable video guard globally';
+    btn.onclick = async () => {
+      await msg('SET_OVERLAY_GUARD_GLOBAL', { enabled: true });
+      await renderOverlayRow(site);
+    };
+    return;
+  }
+
+  if (og.siteDisabled) {
+    state.textContent = 'off for this site';
+    state.className = 'overlay-state off';
+    btn.textContent = 'Turn on';
+    btn.title = 'Remove ad overlays and stop popunders on ' + site;
+  } else {
+    state.textContent = 'on';
+    state.className = 'overlay-state on';
+    btn.textContent = 'Turn off for this site';
+    btn.title = 'Turn video guard off on ' + site;
+  }
+  btn.onclick = async () => {
+    await msg('SET_OVERLAY_GUARD_SITE', { site, enabled: !!og.siteDisabled });
+    await renderOverlayRow(site);
+  };
+
+  renderPopupBlockRow(site, og);
+}
+
+function renderPopupBlockRow(site, og) {
+  const row = document.getElementById('popupblock-row');
+  const state = document.getElementById('popupblock-state');
+  const btn = document.getElementById('popupblock-toggle');
+  // Only meaningful while video guard is active for this site.
+  if (!og.globalEnabled || og.siteDisabled) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  if (og.siteBlockAll) {
+    state.textContent = 'on';
+    state.className = 'overlay-state on';
+    btn.textContent = 'Turn off';
+    btn.title = 'Stop blocking all pop-ups to other sites on ' + site;
+  } else {
+    state.textContent = 'off';
+    state.className = 'overlay-state off';
+    btn.textContent = 'Turn on';
+    btn.title = 'Cancel every pop-up to another site on ' + site + ' (hyperlinks still work)';
+  }
+  btn.onclick = async () => {
+    await msg('SET_POPUP_BLOCK_ALL_SITE', { site, enabled: !og.siteBlockAll });
+    await renderOverlayRow(site);
+  };
+}
+
 async function loadStats() {
   const stats = await msg('GET_STATS');
   const el = document.getElementById('total-blocked');
-  if (stats.totalBlocked > 0) {
-    el.textContent = `— ${stats.totalBlocked} blocked`;
+  const parts = [];
+  if (stats.totalBlocked > 0) parts.push(`${stats.totalBlocked} blocked`);
+  if (stats.overlaysRemoved > 0) parts.push(`${stats.overlaysRemoved} overlay${stats.overlaysRemoved > 1 ? 's' : ''} removed`);
+  if (parts.length) {
+    el.textContent = '— ' + parts.join(', ');
     el.style.display = 'inline';
   }
 }
@@ -174,6 +244,9 @@ async function loadActivity() {
     typeSpan.textContent = chain.type === 'redirect' ? 'Redirect chain'
       : chain.type === 'blocked' ? 'Blocked requests'
       : chain.type === 'page' ? 'Current site'
+      : chain.type === 'overlay' ? 'Overlay ads removed'
+      : chain.type === 'popup_blocked' ? 'Popups blocked'
+      : chain.type === 'popup' ? 'Popups opened'
       : 'Background requests';
     header.appendChild(typeSpan);
     if (chain.type !== 'blocked' && chain.nodes.some(n => blocked.has(n.domain))) {
@@ -241,6 +314,13 @@ async function loadActivity() {
         content.appendChild(kindBadge);
       }
 
+      if (node.reason) {
+        const reasonBadge = document.createElement('span');
+        reasonBadge.className = 'node-badge reason';
+        reasonBadge.textContent = node.reason;
+        content.appendChild(reasonBadge);
+      }
+
       if (isNodeBlocked) {
         const blockedBadge = document.createElement('span');
         blockedBadge.className = 'node-badge blocked';
@@ -250,7 +330,8 @@ async function loadActivity() {
 
       // Inline actions — show on any non-blocked, non-page node (or page domain
       // for background-request and page-domain chains).
-      if (!isNodeBlocked && (!isPage || chain.type === 'background' || chain.type === 'page')) {
+      const blockable = node.domain !== 'about:blank' && node.domain !== 'this page';
+      if (blockable && !isNodeBlocked && (!isPage || chain.type === 'background' || chain.type === 'page' || chain.type === 'overlay')) {
         const inlineActions = document.createElement('span');
         inlineActions.className = 'node-hover-actions';
 
@@ -300,8 +381,45 @@ function buildChains(events, pageDomain) {
   const redirectEvents = events.filter(e => e.type === 'redirect');
   const backgroundEvents = events.filter(e => e.type === 'background');
   const blockedEvents = events.filter(e => e.type === 'blocked');
+  const overlayEvents = events.filter(e => e.type === 'overlay');
+  const popupBlockedEvents = events.filter(e => e.type === 'popup_blocked');
+  const popupEvents = events.filter(e => e.type === 'popup');
 
   const chains = [];
+
+  // Popups: window.open / new-tab links the popup guard cancelled (blocked)
+  // or let through but flagged (opened). Root is the page, children are the
+  // popup targets, each carrying why it was judged that way.
+  const REASON_LABEL = {
+    'video-click': 'video click', 'video-link': 'link over video', 'video-embed': 'video embed',
+    'link-hijack': 'link hijack', 'block-all': 'pop-up blocked', 'synthetic-click': 'fake click', 'blocked-domain': 'blocked list', 'third-party': '3rd party'
+  };
+  for (const [type, list] of [['popup_blocked', popupBlockedEvents], ['popup', popupEvents]]) {
+    if (list.length === 0) continue;
+    const nodes = [{ domain: pageDomain || 'this page', role: 'page' }];
+    const seen = new Set();
+    for (const e of list) {
+      if (seen.has(e.to)) continue;
+      seen.add(e.to);
+      nodes.push({ domain: e.to, role: null, reason: REASON_LABEL[e.reason] || e.reason || null });
+    }
+    if (nodes.length > 1) chains.push({ type, nodes });
+  }
+
+  // Overlay ads the content script removed from video players on this tab.
+  // The page domain is the root; each third-party domain the overlay linked
+  // to hangs off it so the user can block the ad network outright.
+  if (overlayEvents.length > 0) {
+    const nodes = [{ domain: pageDomain || 'this page', role: 'page' }];
+    const seen = new Set();
+    for (const e of overlayEvents) {
+      if (!seen.has(e.to)) {
+        seen.add(e.to);
+        nodes.push({ domain: e.to, role: null });
+      }
+    }
+    if (nodes.length > 1) chains.push({ type: 'overlay', nodes });
+  }
 
   // Prefer the canonical redirect_chain events emitted by the service worker.
   // Each one already carries every hop (HTTP, client, meta) for one navigation,

@@ -381,7 +381,140 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     });
     return true;
   }
+  // --- Overlay guard (content script + popup) ---
+  else if (msg.type === 'GET_OVERLAY_SETTINGS') {
+    // Asked by the content script. Resolve per-site state from the *tab's*
+    // top-level URL so frames inherit the setting of the page they're on.
+    // msg.site is a bare hostname from the popup/about page; content scripts
+    // send nothing and are resolved from their tab's top-level URL.
+    const site = msg.site || getDomain((sender.tab && sender.tab.url) || '') || '';
+    Promise.all([getOverlayGuard(), getIgnored(), getBlocked()]).then(([og, ignored, blocked]) => {
+      const effEnabled = og.enabled && !og.disabledSites.includes(site);
+      sendResponse({
+        enabled: effEnabled,
+        globalEnabled: og.enabled,
+        siteDisabled: og.disabledSites.includes(site),
+        blockAll: effEnabled && og.blockAllSites.includes(site),
+        siteBlockAll: og.blockAllSites.includes(site),
+        allowed: ignored,
+        blocked
+      });
+    });
+    return true;
+  }
+  else if (msg.type === 'SET_POPUP_BLOCK_ALL_SITE') {
+    setPopupBlockAllSite(msg.site, msg.enabled).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  else if (msg.type === 'POPUP_EVENT') {
+    // From the MAIN-world popup guard via the isolated relay. 'blocked' means
+    // a window.open / link click was cancelled; 'opened' means a third-party
+    // popup was allowed but is worth showing so the user can block it.
+    const tabId = sender.tab && sender.tab.id;
+    if (tabId == null || tabId < 0) return;
+    if (!tabActivity[tabId]) {
+      tabActivity[tabId] = { url: sender.tab.url || '', events: [] };
+    }
+    const activity = tabActivity[tabId];
+    if (!activity.url && sender.tab.url) activity.url = sender.tab.url;
+    const pageDomain = getDomain(activity.url) || 'unknown';
+    const to = msg.host || getDomain(msg.url) || 'about:blank';
+    const type = msg.action === 'blocked' ? 'popup_blocked' : 'popup';
+    const dup = activity.events.some(e => e.type === type && e.to === to);
+    if (!dup) {
+      addEvent(tabId, {
+        type,
+        from: pageDomain,
+        to,
+        fromUrl: activity.url,
+        toUrl: msg.url || '',
+        initiator: msg.frameUrl || null,
+        reason: msg.reason || '',
+        timestamp: Date.now()
+      });
+    }
+    if (msg.action === 'blocked') {
+      if (!activity.blockedCount) activity.blockedCount = 0;
+      activity.blockedCount++;
+      incrementBlockedCount();
+      updateBadge(tabId);
+    }
+  }
+  else if (msg.type === 'SET_OVERLAY_GUARD_SITE') {
+    setOverlayGuardSite(msg.site, msg.enabled).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  else if (msg.type === 'SET_OVERLAY_GUARD_GLOBAL') {
+    getOverlayGuard().then(og => {
+      og.enabled = !!msg.enabled;
+      return chrome.storage.local.set({ urlguard_overlay_guard: og });
+    }).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  else if (msg.type === 'OVERLAY_REMOVED') {
+    const tabId = sender.tab && sender.tab.id;
+    if (tabId == null || tabId < 0) return;
+    if (!tabActivity[tabId]) {
+      tabActivity[tabId] = { url: sender.tab.url || '', events: [] };
+    }
+    const activity = tabActivity[tabId];
+    if (!activity.url && sender.tab.url) activity.url = sender.tab.url;
+    const pageDomain = getDomain(activity.url) || 'unknown';
+    for (const domain of msg.domains || []) {
+      const dup = activity.events.some(e => e.type === 'overlay' && e.to === domain);
+      if (dup) continue;
+      addEvent(tabId, {
+        type: 'overlay',
+        from: pageDomain,
+        to: domain,
+        fromUrl: activity.url,
+        toUrl: msg.frameUrl || activity.url,
+        initiator: msg.frameUrl || null,
+        timestamp: Date.now()
+      });
+    }
+    incrementOverlayCount(msg.domains ? 1 : 0);
+  }
 });
+
+// --- Overlay guard settings ---
+// Shape: { enabled: boolean, disabledSites: string[] }  (on by default)
+
+async function getOverlayGuard() {
+  const result = await chrome.storage.local.get('urlguard_overlay_guard');
+  const og = result.urlguard_overlay_guard || {};
+  return {
+    enabled: og.enabled !== false,
+    disabledSites: Array.isArray(og.disabledSites) ? og.disabledSites : [],
+    blockAllSites: Array.isArray(og.blockAllSites) ? og.blockAllSites : []
+  };
+}
+
+async function setPopupBlockAllSite(site, enabled) {
+  if (!site) return;
+  const og = await getOverlayGuard();
+  const has = og.blockAllSites.includes(site);
+  if (enabled && !has) og.blockAllSites.push(site);
+  if (!enabled && has) og.blockAllSites = og.blockAllSites.filter(s => s !== site);
+  await chrome.storage.local.set({ urlguard_overlay_guard: og });
+}
+
+async function setOverlayGuardSite(site, enabled) {
+  if (!site) return;
+  const og = await getOverlayGuard();
+  const has = og.disabledSites.includes(site);
+  if (enabled && has) og.disabledSites = og.disabledSites.filter(s => s !== site);
+  if (!enabled && !has) og.disabledSites.push(site);
+  await chrome.storage.local.set({ urlguard_overlay_guard: og });
+}
+
+async function incrementOverlayCount(n) {
+  if (!n) return;
+  const result = await chrome.storage.local.get('urlguard_stats');
+  const stats = result.urlguard_stats || { totalBlocked: 0 };
+  stats.overlaysRemoved = (stats.overlaysRemoved || 0) + n;
+  await chrome.storage.local.set({ urlguard_stats: stats });
+}
 
 // --- Block/unblock via DNR ---
 

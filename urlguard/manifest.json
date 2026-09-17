@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "InControl - Block URLs, Sneaky Redirects & Background Requests",
-  "version": "1.1.0",
-  "description": "Block sneaky redirects and third-party background requests. You stay in control.",
+  "version": "1.2.0",
+  "description": "Block sneaky redirects, background requests, video ad overlays and popunders. You stay in control.",
   "permissions": [
     "webRequest", "webNavigation", "tabs", "storage",
     "declarativeNetRequest", "declarativeNetRequestWithHostAccess"
@@ -12,6 +12,24 @@
   "background": {
     "service_worker": "background/service-worker.js"
   },
+  "minimum_chrome_version": "111",
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content/popup-guard-main.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_origin_as_fallback": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content/overlay-guard.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_origin_as_fallback": true
+    }
+  ],
   "action": {
     "default_popup": "pages/popup.html",
     "default_icon": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" }

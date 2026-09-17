@@ -28,6 +28,8 @@ code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13px; back
 .callout-warn p { color: #92400e; }
 a { color: #2563eb; text-decoration: none; }
 a:hover { text-decoration: underline; }
+.setting { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #111; margin: 8px 0 4px; cursor: pointer; }
+.setting input { width: 16px; height: 16px; }
 .footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 13px; color: #6b7280; }
 </style>
 </head>
@@ -45,11 +47,25 @@ a:hover { text-decoration: underline; }
 </div>
 
 <h2>What it catches</h2>
-<p>InControl watches two kinds of behavior that normal browsing tools ignore:</p>
+<p>InControl watches three kinds of behavior that normal browsing tools ignore:</p>
 <ul>
   <li><strong>Redirect hijacks</strong> — you click a link to site A, it silently redirects through B, C, D before landing somewhere else. InControl surfaces the full chain.</li>
   <li><strong>Background fires</strong> — you load a page and it quietly fires requests to dozens of other domains (trackers, ad networks, fingerprinters). InControl lists them per tab so you can see exactly who your current page is talking to.</li>
+  <li><strong>Ad overlays on videos</strong> — an ad is stacked on top of the video player so your click on the video opens a spam page instead. InControl removes the overlay and shows you which domains it was pointing at.</li>
+  <li><strong>Popunders</strong> — a script waits for you to click anywhere, then opens an unrelated site in a new tab that steals focus. InControl cancels those opens when the click was on a video, and lists the rest so you can block them.</li>
 </ul>
+
+<h2>Video guard</h2>
+<p>Video guard runs on every page and does two things.</p>
+<h3>Overlay removal</h3>
+<p>It looks for an element that sits <strong>on top of</strong> a video player, covers most of it, and contains a link or embedded frame to a <strong>different domain</strong> than the site you are on. That combination is an ad overlay; the player's own controls, poster and play button never match. When it finds one it removes it, and if you click an overlay that slipped in between checks, the click is swallowed and the overlay is removed instead of opening the ad. Removed overlays appear in <strong>Activity</strong> as <strong>Overlay ads removed</strong>.</p>
+<h3>Popup blocking</h3>
+<p>Every <code>window.open</code> and every new-tab link is checked. A third-party target is <strong>cancelled</strong> when the click that triggered it landed inside a video or a video embed, when it landed on a first-party link such as a page number (a link that keeps you on the site must never open an ad tab), or when the target is on your Blocked list. Third-party popups triggered from a genuine button elsewhere are allowed, because sign-in and payment flows depend on them, but they appear in <strong>Activity</strong> under <strong>Popups opened</strong> so you can block the domain with one click. Cancelled ones show under <strong>Popups blocked</strong>.</p>
+<p>If a site misbehaves, use <strong>Turn off for this site</strong> in the popup. Marking a domain as <strong>Allowed</strong> tells video guard to leave overlays and popups pointing at that domain alone.</p>
+<h3>Block all pop-ups to other sites</h3>
+<p>Some sites open an ad tab on <em>any</em> click, even on empty space. For those, turn on <strong>Block all pop-ups to other sites</strong> in the popup. While it is on for that site, every script-opened pop-up to another domain is cancelled. It is off by default and applies only to sites you switch it on for.</p>
+<p>It does not touch the hyperlinks you click. Ordinary links, including ones that open in a new tab, are normal browser navigations and are never affected. It only cancels pop-ups a script opens with <code>window.open</code>, which is what these ad tabs use. A pop-up you do want (a sign-in or payment window) can be kept by marking its domain as <strong>Allowed</strong>.</p>
+<label class="setting"><input type="checkbox" id="overlay-global"> Enable video guard on all sites (per-site off switches still apply)</label>
 
 <h2>How to use the popup</h2>
 <p>Click the InControl icon in the toolbar. The popup has three tabs:</p>
@@ -94,6 +110,7 @@ a:hover { text-decoration: underline; }
   <li><code>storage</code> — remember your blocked and allowed lists across sessions</li>
   <li><code>declarativeNetRequest</code> — enforce blocks at the network layer</li>
   <li><code>&lt;all_urls&gt;</code> — required to monitor behavior on any site you visit</li>
+  <li>Content scripts on all pages — needed by video guard to find and remove ad overlays on video players and to cancel popunders opened from a click on a video. They read nothing else and send nothing anywhere.</li>
 </ul>
 
 <div class="callout callout-warn">
@@ -104,9 +121,10 @@ a:hover { text-decoration: underline; }
 <p>Full privacy policy: <a href="https://zuura15.github.io/urlguard/privacy-policy.html" target="_blank">zuura15.github.io/urlguard/privacy-policy.html</a></p>
 
 <div class="footer">
-  InControl — version 1.1.0 · Source: <a href="https://github.com/zuura15/urlguard" target="_blank">github.com/zuura15/urlguard</a>
+  InControl — version 1.2.0 · Source: <a href="https://github.com/zuura15/urlguard" target="_blank">github.com/zuura15/urlguard</a>
 </div>
 
 </div>
+<script src="about.js"></script>
 </body>
 </html>
