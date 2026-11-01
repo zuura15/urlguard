@@ -7,17 +7,23 @@
 //
 // Rules, evaluated for every window.open() and for link clicks:
 //   1. Target domain is on the user's Blocked list      -> cancel.
-//   2. Target is third-party (or about:blank) and either the triggering click
+//   2. Target host is accounts.google.com (Sign in with Google / Google
+//      OAuth), or is on the user's Allowed list         -> allow, and do not
+//      report. This sits above block-all and the hijack rules so GIS and
+//      classic OAuth popups still open. It is an exact host, not all of
+//      google.com. An explicit Block of that host still wins (rule 1).
+//   3. Target is third-party (or about:blank) and either the triggering click
 //      landed inside a <video> box, or this frame is a video-embed frame (it
 //      contains a video) -> cancel. Video embeds host the popunder scripts and
 //      never legitimately open another site; the ad often fires from a sibling
 //      embed frame that did not itself receive the click, which is why a
 //      frame-local video test is needed on top of the click test.
-//   3. The triggering click was on a first-party link or navigation element
+//   4. The triggering click was on a first-party link or navigation element
 //      (a page number, a same-site link) yet a third-party tab is opening ->
 //      cancel. Clicking a link that stays on the site must not spawn an ad
 //      tab; this is the document-level popunder that rides ordinary clicks.
-//   4. Any other third-party open                        -> allow, but report
+//   5. Block-all (on by default) cancels every other third-party window.open.
+//   6. Any other third-party open                        -> allow, but report
 //      it so the domain shows in Activity and can be blocked.
 //
 // Config (enabled flag, blocked/allowed lists) arrives from the isolated-world
@@ -30,6 +36,24 @@
 
   const GESTURE_TTL_MS = 1500;
   const MAX_REPORTS = 25;
+
+  // Popup targets the current Google Identity Services client opens, confirmed
+  // against https://accounts.google.com/gsi/client:
+  //   window.open("https://accounts.google.com/gsi/select?...")
+  //   window.open("https://accounts.google.com/o/oauth2/v2/auth?...")
+  //     with display=popup and redirect_uri=gis_transform (button popup),
+  //     and the same /o/oauth2/v2/auth URL for initCodeClient / initTokenClient.
+  // Classic client-side Google OAuth uses that host too
+  // (/o/oauth2/v2/auth or the older /o/oauth2/auth). The open is the absolute
+  // URL, not about:blank. Host-level so a new GIS path on this host keeps
+  // working. www.google.com, youtube.com, and ad hosts are intentionally absent.
+  const GOOGLE_AUTH_POPUP_HOSTS = new Set([
+    'accounts.google.com'
+  ]);
+
+  function isGoogleAuthPopup(host) {
+    return !!host && GOOGLE_AUTH_POPUP_HOSTS.has(host);
+  }
 
   let cfg = null;                 // null until the isolated world sends config
   let blockedSet = new Set();
@@ -195,11 +219,15 @@
     const host = hostOf(rawUrl);
     if (host && blocked.has(host)) return { block: true, reason: 'blocked-domain', host };
     if (host && !isThirdParty(host)) return null;
-    if (host && allowed.has(host)) return null;
+    // Same effect as the user's Allowed list: skip block-all, video-click,
+    // video-embed, and link-hijack, and do not log the open. Built-in so
+    // Sign in with Google works without a per-site toggle.
+    if (host && (allowed.has(host) || isGoogleAuthPopup(host))) return null;
     // Per-site "block all pop-ups to other sites": cancel every third-party (or
-    // blank) window.open, whatever triggered it. Same-site and Allowed-list
-    // targets already returned above, and ordinary hyperlinks never reach here
-    // (they navigate natively, not through window.open), so links keep working.
+    // blank) window.open, whatever triggered it. Same-site targets, the user's
+    // Allowed list, and accounts.google.com already returned above. Ordinary
+    // hyperlinks never reach here (they navigate natively, not through
+    // window.open), so links keep working.
     if (c.blockAll) return { block: true, reason: 'block-all', host: host || 'about:blank' };
     const g = recentGesture();
     if (g && g.media) return { block: true, reason: 'video-click', host: host || 'about:blank' };
@@ -248,7 +276,7 @@
       report('blocked', a.href, 'blocked-domain', host);
       return;
     }
-    if (!isThirdParty(host) || allowed.has(host)) return;
+    if (!isThirdParty(host) || allowed.has(host) || isGoogleAuthPopup(host)) return;
 
     if (!e.isTrusted) {
       const g = recentGesture();

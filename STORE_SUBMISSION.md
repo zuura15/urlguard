@@ -58,5 +58,5 @@ Before uploading to the Chrome Web Store developer dashboard, prepare:
 The zip should contain only the `urlguard/` directory contents (not the parent). See the build script or run:
 
 ```bash
-cd urlguard && zip -r ../incontrol-1.2.0.zip . -x '.*'
+cd urlguard && zip -r ../incontrol-1.2.1.zip . -x '.*'
 ```
