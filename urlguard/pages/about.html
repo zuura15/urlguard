@@ -60,12 +60,13 @@ a:hover { text-decoration: underline; }
 <h3>Overlay removal</h3>
 <p>It looks for an element that sits <strong>on top of</strong> a video player, covers most of it, and contains a link or embedded frame to a <strong>different domain</strong> than the site you are on. That combination is an ad overlay; the player's own controls, poster and play button never match. When it finds one it removes it, and if you click an overlay that slipped in between checks, the click is swallowed and the overlay is removed instead of opening the ad. Removed overlays appear in <strong>Activity</strong> as <strong>Overlay ads removed</strong>.</p>
 <h3>Popup blocking</h3>
-<p>Every <code>window.open</code> and every new-tab link is checked. A third-party target is <strong>cancelled</strong> when the click that triggered it landed inside a video or a video embed, when it landed on a first-party link such as a page number (a link that keeps you on the site must never open an ad tab), or when the target is on your Blocked list. Third-party popups triggered from a genuine button elsewhere are allowed, because sign-in and payment flows depend on them, but they appear in <strong>Activity</strong> under <strong>Popups opened</strong> so you can block the domain with one click. Cancelled ones show under <strong>Popups blocked</strong>.</p>
+<p>Every <code>window.open</code> and every new-tab link is checked. A third-party target is <strong>cancelled</strong> when the click that triggered it landed inside a video or a video embed, when it landed on a first-party link such as a page number (a link that keeps you on the site must never open an ad tab), or when the target is on your Blocked list. When block-all is off for the site, third-party popups triggered from a genuine button elsewhere are allowed, because sign-in and payment flows depend on them, but they appear in <strong>Activity</strong> under <strong>Popups opened</strong> so you can block the domain with one click. Cancelled ones show under <strong>Popups blocked</strong>.</p>
 <p>If a site misbehaves, use <strong>Turn off for this site</strong> in the popup. Marking a domain as <strong>Allowed</strong> tells video guard to leave overlays and popups pointing at that domain alone.</p>
 <h3>Block all pop-ups to other sites</h3>
 <p>Many sites open an ad tab on <em>any</em> click, even on empty space. To stop this, <strong>Block all pop-ups to other sites</strong> is <strong>on by default</strong>: while it is on, every script-opened pop-up to another domain is cancelled. You can turn it off per site with the switch in the popup.</p>
+<p><strong>Sign in with Google</strong> is a built-in exception. A script-opened pop-up to <code>accounts.google.com</code> stays open while block-all is on, including the Google Identity Services window (<code>/gsi/select</code> and <code>/o/oauth2/v2/auth</code>) and the classic Google OAuth window. That host is also left alone by the link-hijack and video-popunder checks. Other Google domains stay blockable, so ad and video popunders keep getting cancelled. If you add <code>accounts.google.com</code> to the Blocked list, that choice wins and the pop-up is cancelled.</p>
 <p>It does not touch the hyperlinks you click. Ordinary links, including ones that open in a new tab, are normal browser navigations and are never affected. It only cancels pop-ups a script opens with <code>window.open</code>, which is what these ad tabs use.</p>
-<div class="callout callout-warn"><p>⚠ Because this is on everywhere by default, a legitimate pop-up a site opens with a script (some sign-in or payment windows) can be blocked too. If a sign-in pop-up will not open, mark its domain as <strong>Allowed</strong>, or turn this switch off for that site.</p></div>
+<div class="callout callout-warn"><p>⚠ Other sign-in or payment pop-ups a site opens with a script can still be blocked. If one will not open, mark its domain as <strong>Allowed</strong>, or turn this switch off for that site.</p></div>
 <label class="setting"><input type="checkbox" id="overlay-global"> Enable video guard on all sites (per-site off switches still apply)</label>
 
 <h2>How to use the popup</h2>
@@ -122,7 +123,7 @@ a:hover { text-decoration: underline; }
 <p>Full privacy policy: <a href="https://zuura15.github.io/urlguard/privacy-policy.html" target="_blank">zuura15.github.io/urlguard/privacy-policy.html</a></p>
 
 <div class="footer">
-  InControl — version 1.2.0 · Source: <a href="https://github.com/zuura15/urlguard" target="_blank">github.com/zuura15/urlguard</a>
+  InControl — version 1.2.1 · Source: <a href="https://github.com/zuura15/urlguard" target="_blank">github.com/zuura15/urlguard</a>
 </div>
 
 </div>
